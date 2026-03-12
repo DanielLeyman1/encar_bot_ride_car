@@ -715,14 +715,20 @@ async def fetch_report_pdf_mapped(
         # #region agent log
         _debug_log("encar_report.py:except", "TimeoutError", {"type": "TimeoutError", "msg": str(e)}, "H1")
         # #endregion
-        _log(f"REPORT_MAPPED: таймаут {e}")
+        _log(f"REPORT_MAPPED: таймаут (asyncio) {e}")
+        _log(f"REPORT_MAPPED: FAIL type=TimeoutError msg={e}")
         return (False, None, False)
     except Exception as e:
         import traceback
         # #region agent log
         _debug_log("encar_report.py:except", "Exception", {"type": type(e).__name__, "msg": str(e)}, "H2,H3,H4,H5")
         # #endregion
-        _log(f"REPORT_MAPPED: ошибка {e}")
+        is_timeout = "timeout" in type(e).__name__.lower() or "timeout" in str(e).lower()
+        if is_timeout:
+            _log(f"REPORT_MAPPED: таймаут (playwright/сеть) {e}")
+        else:
+            _log(f"REPORT_MAPPED: ошибка {e}")
+        _log(f"REPORT_MAPPED: FAIL type={type(e).__name__} msg={e}")
         traceback.print_exc()
         return (False, None, False)
 
