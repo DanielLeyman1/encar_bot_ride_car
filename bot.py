@@ -10,7 +10,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 from encar_report import extract_carid, fetch_report_pdf, run_report_diagnostics
-from report_cache import get_cached_token, save_report
+from report_cache import save_report
 from report_server import run_server
 
 # ===== Настройки =====
@@ -61,7 +61,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Можешь:\n"
         "• Отправить PDF — сохраню и дам ID для поста.\n"
-        "• Написать ID машины или ссылку Encar — сформирую отчёт и дам ссылку для объявления (HTML, кэш 48 ч, ссылка 7 дней).\n"
+        "• Написать ID машины или ссылку Encar — сформирую отчёт и дам ссылку для объявления (HTML, ссылка 7 дней).\n"
         "• /myid — твой Telegram ID.\n"
         "• /report_diag — диагностика логотипа и схем."
     )
@@ -138,14 +138,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     bot_dir = Path(__file__).resolve().parent
-    cached_token = get_cached_token(carid, DATA_DIR)
-    if cached_token and BASE_URL:
-        report_url = f"{BASE_URL}/r/{cached_token}"
-        await update.message.reply_text(
-            f"Посмотреть отчёт об истории авто: {report_url}"
-        )
-        return
-
     status = await update.message.reply_text(f"Запрашиваю отчёт Encar для carid={carid}…")
 
     async def report_status(msg: str):

@@ -18,14 +18,19 @@
     * { box-sizing: border-box; }
     body { margin: 0; padding: 24px; font-family: var(--font-sans); font-size: 15px; line-height: 1.5; color: var(--wra-gray-900); background: var(--wra-gray-100); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
     .box { background: var(--wra-white); padding: 2.5rem; border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); border: 1px solid var(--wra-gray-200); max-width: 480px; text-align: center; }
-    .box-logo { height: 48px; width: auto; margin-bottom: 1.25rem; }
+    .box-brand { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .box-logo { height: 48px; width: auto; display: block; object-fit: contain; flex-shrink: 0; }
+    .box-brand-title { font-family: var(--font-sans); font-size: 1.25rem; font-weight: 700; color: var(--wra-gray-900); margin: 0; line-height: 1.2; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
     .box h1 { font-size: 1.25rem; margin: 0 0 1rem 0; color: var(--wra-gray-900); }
     .box p { margin: 0; color: var(--wra-text-muted); }
   </style>
 </head>
 <body>
   <div class="box">
-    {% if logo_src %}<img src="{{ logo_src }}" alt="" class="box-logo" />{% endif %}
+    <div class="box-brand">
+      {% if logo_src %}<img src="{{ logo_src }}" alt="" class="box-logo" />{% endif %}
+      <span class="box-brand-title">Ride Auto</span>
+    </div>
     <h1>Отчёт устарел или данное авто уже продано</h1>
     <p>Просьба связаться с менеджером Ride Auto для уточнения деталей.</p>
   </div>
