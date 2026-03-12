@@ -449,10 +449,26 @@ def _render_report_template(data_ru: dict, base_dir: Path | None = None, use_fil
     if "company_name" not in data_ru:
         data_ru["company_name"] = os.environ.get("REPORT_COMPANY_NAME", "World Ride Auto")
 
-    # Нормализация блока «Общее состояние»: пробег «Много» только от 70 000 км; одометр — хорошо / Большой по тому же правилу
+    # Год выпуска: если на Encar указан «модельный год» (연식) больше года первой регистрации — подставляем год/дату из регистрации
     import re
+    _basic = data_ru.get("basic", {})
+    _year_key = "Год выпуска"
+    _reg_key = "Дата первой регистрации"
+    if _year_key in _basic and _reg_key in _basic:
+        year_val = _basic[_year_key]
+        reg_val = _basic[_reg_key]
+        year_match = re.search(r"20\d{2}", year_val)
+        reg_match = re.search(r"(20\d{2})[\s년.\-]*(\d{1,2})?", reg_val)
+        if year_match and reg_match:
+            model_year = int(year_match.group(0))
+            reg_year = int(reg_match.group(1))
+            reg_month = int(reg_match.group(2)) if reg_match.group(2) else None
+            if reg_year < model_year:
+                _basic[_year_key] = f"{reg_year}.{reg_month:02d}" if reg_month else str(reg_year)
+
+    # Нормализация блока «Общее состояние»: пробег «Много» только от 70 000 км; одометр — хорошо / Большой по тому же правилу
     MILEAGE_HIGH_KM = 70_000
-    OPTION_PAIRS = ("хорошо плохо", "плохо хорошо", "Нет Да", "Да Нет")
+    OPTION_PAIRS = ("хорошо плохо", "плохо хорошо", "Нет Да", "Да Нет", "Да Нет", "Нет Да", "Не применимо Да", "Не применимо Нет", "Нет Не применимо", "Да Не применимо")
     summary_list = data_ru.get("summary", [])
     km = None
     for row in summary_list:
@@ -482,9 +498,15 @@ def _render_report_template(data_ru: dict, base_dir: Path | None = None, use_fil
             row["value_actual"] = ""
         val = (row.get("value") or "").strip()
         val_actual = (row.get("value_actual") or "").strip()
-        if val_actual and val in OPTION_PAIRS:
-            row["value"] = val_actual
-            row["value_actual"] = ""
+        # Для полей «Да/Нет» и «Не применимо» показываем только фактическое значение, а не «Нет Да»
+        if val_actual:
+            if val in OPTION_PAIRS or (val_actual in val and len(val.split()) >= 2):
+                row["value"] = val_actual
+                row["value_actual"] = ""
+            elif row.get("label") == "Цвет":
+                # Цвет: показываем фактическое значение (конкретный цвет), а не категорию
+                row["value"] = val_actual
+                row["value_actual"] = ""
 
     logo_path = diag.get("logo_path")
     outer_path = diag.get("diagram_outer_path")
