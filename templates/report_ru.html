@@ -94,14 +94,21 @@
           <td>{{ row.label }}</td>
           <td>{{ row.status }}</td>
           <td>{% set v = row.value or '' %}
+            {% set v_lower = (v|lower)|trim %}
+            {% set lbl = row.label %}
+            {% if lbl in ['Тюнинг', 'Особая история', 'Смена назначения'] %}
+            {% if v_lower == 'да' %}<span class="value-bad">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-good">{{ v }}</span>{% else %}{{ v }}{% endif %}
+            {% elif lbl in ['Основные опции', 'Реколл'] %}
+            {% if v_lower == 'да' %}<span class="value-good">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-bad">{{ v }}</span>{% else %}{{ v }}{% endif %}
+            {% else %}
             {% set actual = row.value_actual %}
             {% if not actual and v %}{% set parts = v.split() %}{% if parts|length >= 2 and parts[-1] in ['Да', 'Нет', 'хорошо', 'плохо'] %}{% set actual = parts[-1] %}{% endif %}{% endif %}
             {% if actual %}
             {{ v|replace(actual, '<span class="value-actual">' ~ actual ~ '</span>')|safe }}
-            {% else %}{% set v_lower = v|lower %}
-            {% if v_lower in ('плохо', 'нет') %}<span class="value-bad">{{ row.value }}</span>
+            {% elif v_lower in ('плохо', 'нет') %}<span class="value-bad">{{ row.value }}</span>
             {% elif v_lower in ('хорошо', 'да') %}<span class="value-good">{{ row.value }}</span>
-            {% else %}{{ row.value }}{% endif %}{% endif %}
+            {% else %}{{ row.value }}{% endif %}
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
