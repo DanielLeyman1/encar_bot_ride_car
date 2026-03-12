@@ -710,7 +710,14 @@ async def fetch_report_pdf_mapped(
                     await page.wait_for_selector(".inspec_carinfo, #bodydiv", timeout=20000)
                 except Exception:
                     pass
-                await page.wait_for_timeout(1500)
+                # Ждём появления таблиц отчёта (контент может подгружаться динамически)
+                for selector in ["table.tbl_total", ".inspec_carinfo table.ckst", "table.tbl_detail"]:
+                    try:
+                        await page.wait_for_selector(selector, timeout=10000)
+                        break
+                    except Exception:
+                        pass
+                await page.wait_for_timeout(3000)
                 _log("REPORT_MAPPED: страница загружена")
                 await _status("Извлекаю данные, формирую отчёт на русском…")
                 phase = "parse"
