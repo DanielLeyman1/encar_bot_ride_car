@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import threading
+import traceback
 import time
 import uuid
 from pathlib import Path
@@ -39,6 +40,25 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def _run_report_http_thread() -> None:
+    """Flask /r/<token> в отдельном потоке; ошибки не должны пропадать незамеченными."""
+    bot_dir = Path(__file__).resolve().parent
+    template_dir = bot_dir / "templates"
+    try:
+        run_server(port=REPORT_SERVER_PORT, reports_dir=REPORTS_DIR, data_dir=DATA_DIR, template_dir=template_dir)
+    except OSError as e:
+        logger.error("Сервер отчётов: порт %s недоступен: %s", REPORT_SERVER_PORT, e)
+        print(
+            f"ОШИБКА: не удалось запустить HTTP отчётов на 0.0.0.0:{REPORT_SERVER_PORT} — {e}\n"
+            "Проверьте, свободен ли порт (ss -tlnp) и совпадает ли он с nginx proxy_pass.",
+            flush=True,
+            file=sys.stderr,
+        )
+    except Exception:
+        logger.exception("Сервер отчётов: сбой при запуске")
+        traceback.print_exc()
 
 
 def _inject_og_url(html_path: Path, report_url: str) -> None:
@@ -202,14 +222,10 @@ def main():
     except Exception:
         pass
 
-    bot_dir = Path(__file__).resolve().parent
-    template_dir = bot_dir / "templates"
-    server_thread = threading.Thread(
-        target=lambda: run_server(port=REPORT_SERVER_PORT, reports_dir=REPORTS_DIR, data_dir=DATA_DIR, template_dir=template_dir),
-        daemon=True,
-    )
+    server_thread = threading.Thread(target=_run_report_http_thread, daemon=True, name="report-http")
     server_thread.start()
-    print(f"Сервер отчётов: http://0.0.0.0:{REPORT_SERVER_PORT}/r/<token>")
+    print(f"Запуск HTTP отчётов на 0.0.0.0:{REPORT_SERVER_PORT} (поток {server_thread.name})…", flush=True)
+    print(f"Сервер отчётов: http://0.0.0.0:{REPORT_SERVER_PORT}/r/<token>", flush=True)
 
     try:
         TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8596627705:AAFHUS6_b3jqhBm1NyLGsEARFhxHL0PJ4Go")
