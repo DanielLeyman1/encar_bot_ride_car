@@ -615,6 +615,11 @@ def _render_report_template(data_ru: dict, base_dir: Path | None = None, use_fil
     data_ru["diagram_outer_viewbox"] = diagram_outer_viewbox
     data_ru["diagram_inner_viewbox"] = diagram_inner_viewbox
 
+    data_ru["has_basic"] = bool(data_ru.get("basic"))
+    data_ru["has_summary_block"] = bool(data_ru.get("summary")) or bool(data_ru.get("repair"))
+    data_ru["has_diagram"] = bool(data_ru.get("diagram"))
+    data_ru["has_detail"] = bool(data_ru.get("detail"))
+
     env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)
     template = env.get_template("report_ru.html")
     return template.render(**data_ru)

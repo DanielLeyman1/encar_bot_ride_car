@@ -18,7 +18,8 @@ ADMIN_ID = int(os.environ.get("TELEGRAM_ADMIN_ID", "377261863"))
 STORAGE_DIR = Path("pdf_storage")
 REPORTS_DIR = Path(os.environ.get("REPORTS_DIR", "reports"))
 DATA_DIR = Path(__file__).resolve().parent / "data"
-BASE_URL = os.environ.get("REPORT_BASE_URL", "").rstrip("/")
+# Публичный URL для ссылок /r/<token> (nginx проксирует на этот хост). Пустая строка в env отключает выдачу ссылки.
+BASE_URL = os.environ.get("REPORT_BASE_URL", "https://www.wrideauto.ru").rstrip("/")
 REPORT_SERVER_PORT = int(os.environ.get("REPORT_SERVER_PORT", "8080"))
 
 # Сообщение для обычных пользователей (только админ запрашивает отчёты)

@@ -11,38 +11,105 @@
   <meta property="og:image" content="{{ og_image or '' }}">
   <style>
     :root {
-      --wra-white: #fff; --wra-gray-100: #f3f4f6; --wra-gray-200: #e5e7eb;
-      --wra-gray-600: #4b5563; --wra-gray-900: #111827; --wra-text-muted: #6b7280;
-      --wra-blue: #2563eb; --wra-blue-note: #1d4ed8;
+      --wra-white: #fff; --wra-gray-50: #f9fafb; --wra-gray-100: #f3f4f6; --wra-gray-200: #e5e7eb;
+      --wra-gray-600: #4b5563; --wra-gray-800: #1f2937; --wra-gray-900: #111827; --wra-text-muted: #6b7280;
+      --wra-primary: #3b82f6; --wra-primary-light: #eff6ff;
+      --wra-success: #16a34a; --wra-danger: #dc2626; --wra-warn: #d97706;
       --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-      --text-sm: clamp(0.8125rem, 2.2vw, 0.875rem); --space-4: clamp(12px, 3vw, 16px); --space-6: clamp(16px, 4vw, 24px); --radius-xl: 20px;
-      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --text-sm: clamp(0.8125rem, 2.2vw, 0.875rem);
+      --space-2: 8px; --space-4: clamp(12px, 3vw, 16px); --space-6: clamp(16px, 4vw, 24px);
+      --radius-md: 12px; --radius-xl: 20px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow: 0 2px 10px rgba(0,0,0,0.06);
+      --transition: 0.2s ease;
     }
     * { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; }
     body { margin: 0; padding: clamp(12px, 4vw, 24px); font-family: var(--font-sans); font-size: clamp(14px, 2.5vw, 15px); line-height: 1.5; color: var(--wra-gray-900); background: var(--wra-gray-100); word-wrap: break-word; }
     .report { max-width: 800px; margin: 0 auto; min-width: 0; }
-    .section { background: var(--wra-white); padding: var(--space-6); border-radius: var(--radius-xl); margin-bottom: var(--space-4); box-shadow: var(--shadow-sm); border: 1px solid var(--wra-gray-200); }
-    .section h2 { margin: 0 0 1rem 0; padding-bottom: 0.75rem; border-bottom: 2px solid var(--wra-gray-100); font-size: clamp(1rem, 2.5vw, 1.125rem); font-weight: 600; color: var(--wra-gray-900); }
+    .report-header { display: flex; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem; min-width: 0; }
+    .report-header-logo { height: clamp(15px, 4.5vw, 20px); width: auto; max-width: 100%; display: block; object-fit: contain; flex-shrink: 0; }
+    .report-header-brand { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+    .report-header-title { font-size: clamp(0.75rem, 2.2vw, 0.9375rem); font-weight: 700; color: var(--wra-gray-900); margin: 0; line-height: 1.2; }
+    .report-title { font-size: clamp(1rem, 4.5vw, 1.25rem); font-weight: 700; margin: 0 0 1rem 0; line-height: 1.3; color: var(--wra-gray-900); }
+
+    /* Вкладки (как на карточке каталога) */
+    .report-tab-shell {
+      background: var(--wra-white);
+      border: 1px solid var(--wra-gray-200);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-6);
+      margin-bottom: var(--space-4);
+    }
+    .report-tab-shell > h2 { margin: 0 0 var(--space-4) 0; padding-bottom: 0.75rem; border-bottom: 2px solid var(--wra-gray-100); font-size: clamp(1rem, 2.5vw, 1.125rem); font-weight: 600; }
+    .report-tab-headers {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+    .report-tab-btn {
+      padding: 10px 14px;
+      min-height: 44px;
+      border: 1px solid var(--wra-gray-200);
+      border-radius: var(--radius-md);
+      background: var(--wra-gray-50);
+      color: var(--wra-gray-800);
+      font-family: inherit;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: background var(--transition), border-color var(--transition);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .report-tab-btn:hover { background: var(--wra-gray-100); border-color: var(--wra-gray-300); }
+    .report-tab-btn.is-active { background: var(--wra-primary-light); border-color: var(--wra-primary); color: var(--wra-gray-900); }
+    .report-tab-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
+    .report-tab-panels {
+      border: 1px solid var(--wra-gray-200);
+      border-radius: var(--radius-md);
+      background: var(--wra-white);
+      overflow: hidden;
+      min-height: 60px;
+    }
+    .report-tab-panel {
+      display: none;
+      padding: var(--space-4) var(--space-6);
+      animation: reportPanelIn 0.35s ease-out;
+    }
+    .report-tab-panel.is-visible { display: block; }
+    @keyframes reportPanelIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-inner h3 { margin: 0 0 0.75rem 0; font-size: var(--text-sm); font-weight: 600; color: var(--wra-gray-800); }
+    .section-inner + .section-inner { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--wra-gray-100); }
+
     .dotted-pair { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--wra-gray-100); gap: 1rem; }
     .dotted-pair:last-child { border-bottom: none; }
     .dotted-pair .key { color: var(--wra-text-muted); font-size: var(--text-sm); font-weight: 500; min-width: 0; }
-    .dotted-pair .value { font-weight: 600; font-size: var(--text-sm); color: var(--wra-gray-900); text-align: right; word-break: break-word; }
+    .dotted-pair .value { font-weight: 600; font-size: var(--text-sm); text-align: right; word-break: break-word; color: var(--wra-gray-900); }
+
     table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); table-layout: fixed; }
     th, td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--wra-gray-200); word-break: break-word; }
     th { color: var(--wra-text-muted); font-weight: 500; }
     td { color: var(--wra-gray-900); font-weight: 500; }
-    .report-header { display: flex; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem; min-width: 0; }
-    .report-header-logo { height: clamp(15px, 4.5vw, 20px); width: auto; max-width: 100%; display: block; object-fit: contain; transform: translateZ(0); -webkit-backface-visibility: hidden; backface-visibility: hidden; flex-shrink: 0; }
-    .report-header-brand { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
-    .report-header-title { font-family: var(--font-sans); font-size: clamp(0.75rem, 2.2vw, 0.9375rem); font-weight: 700; color: var(--wra-gray-900); margin: 0; line-height: 1.2; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-    .report-title { font-size: clamp(1rem, 4.5vw, 1.25rem); font-weight: 700; margin: 0 0 1rem 0; line-height: 1.3; color: var(--wra-gray-900); }
-    .value-good { background: #dcfce7; color: #166534; padding: 0.15em 0.5em; border-radius: 6px; display: inline-block; }
-    .value-bad { background: #fee2e2; color: #991b1b; padding: 0.15em 0.5em; border-radius: 6px; display: inline-block; }
+
+    /* Семантика: хорошо / плохо / нейтрально */
+    .value-good, .value-tone-good { color: var(--wra-success); font-weight: 600; }
+    .value-bad, .value-tone-bad { color: var(--wra-danger); font-weight: 600; }
+    .value-warn, .value-tone-warn { color: var(--wra-warn); font-weight: 600; }
+    .value-good.pill, .value-bad.pill, .value-warn.pill { padding: 0.15em 0.5em; border-radius: 6px; display: inline-block; }
+    .value-good.pill { background: #dcfce7; }
+    .value-bad.pill { background: #fee2e2; }
+    .value-warn.pill { background: #ffedd5; }
     .value-actual { background: #e5e7eb; color: #374151; padding: 0.15em 0.5em; border-radius: 6px; display: inline-block; }
-    .detail-device { color: var(--wra-blue); font-weight: 600; vertical-align: top; }
+
+    .detail-device { color: var(--wra-primary); font-weight: 600; vertical-align: top; }
     .detail-table .detail-device { min-width: 10em; }
-    .section-diagram { }
+
     .diagram-legend-caption { margin: 0 0 0.5rem 0; font-size: var(--text-sm); color: var(--wra-text-muted); }
     .diagram-legend { list-style: none; margin: 0 0 1rem 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; font-size: var(--text-sm); }
     .diagram-legend li { display: flex; align-items: center; gap: 0.4rem; }
@@ -53,12 +120,42 @@
     .diagram-img { max-width: 100%; height: auto; max-height: 280px; display: block; vertical-align: top; }
     .diagram-overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
     .diagram-overlay svg { width: 100%; height: 100%; display: block; }
-    .diagram-overlay image { opacity: 0.9; }
     .diagram-images figcaption { font-size: var(--text-sm); color: var(--wra-text-muted); margin-top: 0.35rem; }
-    .diagram-zones { margin-top: 0.5rem; }
+    .diagram-zones td.value-zone-bad { color: var(--wra-danger); font-weight: 600; }
+    .diagram-zones td.value-zone-warn { color: var(--wra-warn); font-weight: 600; }
+    .diagram-zones td.value-zone-ok { color: var(--wra-success); font-weight: 600; }
   </style>
 </head>
 <body>
+{% set ns = namespace(first='') %}
+{% if has_basic %}{% set ns.first = 'basic' %}
+{% elif has_summary_block %}{% set ns.first = 'summary' %}
+{% elif has_diagram %}{% set ns.first = 'diagram' %}
+{% elif has_detail %}{% set ns.first = 'detail' %}
+{% endif %}
+
+{# Тон статуса диагностики (рус./кор.) #}
+{% macro tone_status(text) -%}
+{%- set t = (text|string)|lower|replace('ё', 'е')|trim -%}
+{%- if t in ['хорошо', 'да', 'норма', 'нормально', 'отлично', 'исправно', '양호', '적정', '정상', '없음'] -%}
+<span class="value-tone value-tone-good">{{ text }}</span>
+{%- elif t in ['плохо', 'нет', 'неисправно', '불량'] or 'замен' in t or 'трещин' in t or 'поврежд' in t or 'корроз' in t or '누유' in t or '누수' in t or '교체' in t or '도장' in t -%}
+<span class="value-tone value-tone-bad">{{ text }}</span>
+{%- elif 'микро' in t or 'легк' in t or '미세' in t -%}
+<span class="value-tone value-tone-warn">{{ text }}</span>
+{%- else -%}{{ text }}{%- endif -%}
+{%- endmacro %}
+
+{# Ячейка зоны схемы: замена/окрас и т.п. #}
+{% macro zone_codes_class(codes_join) -%}
+{%- set j = codes_join|string -%}
+{%- set c = j|lower -%}
+{%- if '교환' in j or '교체' in j or 'замен' in c or ' scratch' in c or c.startswith('scratch') or ' damage' in c or 'dent' in c or c == 'x' or c.startswith('x,') or c.endswith(', x') or ', x,' in c %}value-zone-bad
+{%- elif 'покрас' in c or 'окрас' in c or '도장' in j or '도색' in j or ' metal' in c or c == 'p' or c.startswith('p,') or ', p,' in c or c.endswith(', p') %}value-zone-warn
+{%- elif c == '' or c == '—' or 'оригинал' in c or '정상' in j %}value-zone-ok
+{%- endif -%}
+{%- endmacro %}
+
   <div class="report">
     <header class="report-header">
       <div class="report-header-brand">
@@ -70,154 +167,221 @@
     </header>
     <h2 class="report-title">Отчёт о состоянии автомобиля</h2>
 
-    {% if basic %}
-    <div class="section">
-      <h2>Основные данные</h2>
-      <div class="basic-list">
-        {% for key, value in basic.items() %}
-        {% if value %}
-        <div class="dotted-pair"><span class="key">{{ key }}</span><span class="value">{{ value }}</span></div>
+    {% if has_basic or has_summary_block or has_diagram or has_detail %}
+    <div class="report-tab-shell">
+      <h2>Разделы отчёта</h2>
+      <div class="report-tab-headers" role="tablist" aria-label="Разделы отчёта">
+        {% if has_basic %}
+        <button type="button" class="report-tab-btn{% if ns.first == 'basic' %} is-active{% endif %}" role="tab" aria-selected="{% if ns.first == 'basic' %}true{% else %}false{% endif %}" data-target="basic">Основное</button>
         {% endif %}
-        {% endfor %}
+        {% if has_summary_block %}
+        <button type="button" class="report-tab-btn{% if ns.first == 'summary' %} is-active{% endif %}" role="tab" aria-selected="{% if ns.first == 'summary' %}true{% else %}false{% endif %}" data-target="summary">Сводка и ДТП</button>
+        {% endif %}
+        {% if has_diagram %}
+        <button type="button" class="report-tab-btn{% if ns.first == 'diagram' %} is-active{% endif %}" role="tab" aria-selected="{% if ns.first == 'diagram' %}true{% else %}false{% endif %}" data-target="diagram">Схема кузова</button>
+        {% endif %}
+        {% if has_detail %}
+        <button type="button" class="report-tab-btn{% if ns.first == 'detail' %} is-active{% endif %}" role="tab" aria-selected="{% if ns.first == 'detail' %}true{% else %}false{% endif %}" data-target="detail">Диагностика</button>
+        {% endif %}
       </div>
-    </div>
-    {% endif %}
-
-    {% if summary %}
-    <div class="section">
-      <h2>Общее состояние</h2>
-      <table>
-        <thead><tr><th>Позиция</th><th>Состояние</th><th>Значение</th></tr></thead>
-        <tbody>
-        {% for row in summary %}
-        <tr>
-          <td>{{ row.label }}</td>
-          <td>{{ row.status }}</td>
-          <td>{% set v = row.value or '' %}
-            {% set v_lower = (v|lower)|trim %}
-            {% set lbl = row.label %}
-            {% if lbl in ['Тюнинг', 'Особая история', 'Смена назначения'] %}
-            {% if v_lower == 'да' %}<span class="value-bad">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-good">{{ v }}</span>{% else %}{{ v }}{% endif %}
-            {% elif lbl in ['Основные опции', 'Реколл'] %}
-            {% if v_lower == 'да' %}<span class="value-good">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-bad">{{ v }}</span>{% else %}{{ v }}{% endif %}
-            {% else %}
-            {% set actual = row.value_actual %}
-            {% if not actual and v %}{% set parts = v.split() %}{% if parts|length >= 2 and parts[-1] in ['Да', 'Нет', 'хорошо', 'плохо'] %}{% set actual = parts[-1] %}{% endif %}{% endif %}
-            {% if actual %}
-            {{ v|replace(actual, '<span class="value-actual">' ~ actual ~ '</span>')|safe }}
-            {% elif v_lower in ('плохо', 'нет') %}<span class="value-bad">{{ row.value }}</span>
-            {% elif v_lower in ('хорошо', 'да') %}<span class="value-good">{{ row.value }}</span>
-            {% else %}{{ row.value }}{% endif %}
+      <div class="report-tab-panels">
+        {% if has_basic %}
+        <div class="report-tab-panel{% if ns.first == 'basic' %} is-visible{% endif %}" id="panel-basic" role="tabpanel">
+          <div class="section-inner">
+            <h3>Основные данные</h3>
+            {% for key, value in basic.items() %}
+            {% if value %}
+            <div class="dotted-pair"><span class="key">{{ key }}</span><span class="value">{{ value }}</span></div>
             {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
-
-    {% if repair %}
-    <div class="section">
-      <h2>Участие в ДТП и ремонты</h2>
-      <table>
-        <thead><tr><th>Пункт</th><th>Результат</th></tr></thead>
-        <tbody>
-        {% for row in repair %}
-        <tr><td>{{ row.label }}</td><td>{{ row.value }}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endif %}
-
-    {% if diagram %}
-    <div class="section section-diagram">
-      <h2>Схема состояния кузова</h2>
-      <p class="diagram-legend-caption">Обозначения:</p>
-      <ul class="diagram-legend">
-        {% set code_icons = diagram_code_icons or {} %}
-        {% set legend_labels = diagram_legend_labels or {} %}
-        {% for code, label in (diagram_legend_labels or {}).items() %}
-        {% if code_icons.get(code) %}
-        <li><img src="{{ code_icons[code] }}" alt="" class="diagram-legend-icon" /> {{ label }}</li>
+            {% endfor %}
+          </div>
+        </div>
         {% endif %}
-        {% endfor %}
-      </ul>
-      <div class="diagram-images">
-        <figure>
-          <div class="diagram-figure-wrap">
-            <img src="{{ diagram_outer_src or 'https://www.encar.com/images/pop/check/img_inspection01.gif' }}" alt="Внешние панели" class="diagram-img" />
-            {% set viewbox_outer = diagram_outer_viewbox or diagram_viewbox or '0 0 400 200' %}
-            {% set icon_size = diagram_icon_size or 24 %}
-            {% set outer_data = diagram_outer_data or {} %}
-            {% if outer_data and diagram.zones %}
-            <div class="diagram-overlay" aria-hidden="true">
-              <svg viewBox="{{ viewbox_outer }}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                {% for z in diagram.zones %}
-                {% if z.zone_id and z.code and outer_data.get(z.zone_id) and (diagram_code_icons or {}).get(z.code) %}
-                {% set o = outer_data[z.zone_id] %}
-                <image x="{{ o.cx - icon_size / 2 }}" y="{{ o.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ diagram_code_icons[z.code] }}" />
-                {% endif %}
-                {% endfor %}
-              </svg>
+
+        {% if has_summary_block %}
+        <div class="report-tab-panel{% if ns.first == 'summary' %} is-visible{% endif %}" id="panel-summary" role="tabpanel">
+          {% if summary %}
+          <div class="section-inner">
+            <h3>Общее состояние</h3>
+            <table>
+              <thead><tr><th>Позиция</th><th>Состояние</th><th>Значение</th></tr></thead>
+              <tbody>
+              {% for row in summary %}
+              <tr>
+                <td>{{ row.label }}</td>
+                <td>{{ row.status }}</td>
+                <td>{% set v = row.value or '' %}
+                  {% set v_lower = (v|lower)|trim %}
+                  {% set lbl = row.label %}
+                  {% if lbl in ['Тюнинг', 'Особая история', 'Смена назначения'] %}
+                  {% if v_lower == 'да' %}<span class="value-bad pill">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-good pill">{{ v }}</span>{% else %}{{ v }}{% endif %}
+                  {% elif lbl in ['Основные опции', 'Реколл'] %}
+                  {% if v_lower == 'да' %}<span class="value-good pill">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-bad pill">{{ v }}</span>{% else %}{{ v }}{% endif %}
+                  {% else %}
+                  {% set actual = row.value_actual %}
+                  {% if not actual and v %}{% set parts = v.split() %}{% if parts|length >= 2 and parts[-1] in ['Да', 'Нет', 'хорошо', 'плохо'] %}{% set actual = parts[-1] %}{% endif %}{% endif %}
+                  {% if actual %}
+                  {{ v|replace(actual, '<span class="value-actual">' ~ actual ~ '</span>')|safe }}
+                  {% elif v_lower in ('плохо', 'нет') %}<span class="value-bad pill">{{ row.value }}</span>
+                  {% elif v_lower in ('хорошо', 'да') %}<span class="value-good pill">{{ row.value }}</span>
+                  {% else %}{{ row.value }}{% endif %}
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+          {% if repair %}
+          <div class="section-inner">
+            <h3>Участие в ДТП и ремонты</h3>
+            <table>
+              <thead><tr><th>Пункт</th><th>Результат</th></tr></thead>
+              <tbody>
+              {% for row in repair %}
+              <tr>
+                <td>{{ row.label }}</td>
+                <td>
+                  {% set rv = row.value or '' %}
+                  {% set rv_l = (rv|lower)|trim %}
+                  {% if rv_l == 'нет' or rv_l == '0' or rv_l == '—' %}<span class="value-good">{{ rv }}</span>
+                  {% elif rv_l == 'да' or ('есть' in rv_l and 'не ' not in rv_l) %}<span class="value-bad">{{ rv }}</span>
+                  {% else %}{{ rv }}{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if has_diagram %}
+        <div class="report-tab-panel{% if ns.first == 'diagram' %} is-visible{% endif %}" id="panel-diagram" role="tabpanel">
+          <div class="section-inner section-diagram">
+            <h3>Схема состояния кузова</h3>
+            <p class="diagram-legend-caption">Обозначения:</p>
+            <ul class="diagram-legend">
+              {% set code_icons = diagram_code_icons or {} %}
+              {% for code, label in (diagram_legend_labels or {}).items() %}
+              {% if code_icons.get(code) %}
+              <li><img src="{{ code_icons[code] }}" alt="" class="diagram-legend-icon" /> {{ label }}</li>
+              {% endif %}
+              {% endfor %}
+            </ul>
+            <div class="diagram-images">
+              <figure>
+                <div class="diagram-figure-wrap">
+                  <img src="{{ diagram_outer_src or 'https://www.encar.com/images/pop/check/img_inspection01.gif' }}" alt="Внешние панели" class="diagram-img" />
+                  {% set viewbox_outer = diagram_outer_viewbox or diagram_viewbox or '0 0 400 200' %}
+                  {% set icon_size = diagram_icon_size or 24 %}
+                  {% set outer_data = diagram_outer_data or {} %}
+                  {% if outer_data and diagram.zones %}
+                  <div class="diagram-overlay" aria-hidden="true">
+                    <svg viewBox="{{ viewbox_outer }}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                      {% for z in diagram.zones %}
+                      {% if z.zone_id and z.code and outer_data.get(z.zone_id) and (diagram_code_icons or {}).get(z.code) %}
+                      {% set o = outer_data[z.zone_id] %}
+                      <image x="{{ o.cx - icon_size / 2 }}" y="{{ o.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ diagram_code_icons[z.code] }}" />
+                      {% endif %}
+                      {% endfor %}
+                    </svg>
+                  </div>
+                  {% endif %}
+                </div>
+                <figcaption>Внешние панели</figcaption>
+              </figure>
+              <figure>
+                <div class="diagram-figure-wrap">
+                  <img src="{{ diagram_inner_src or 'https://www.encar.com/images/pop/check/img_inspection02_new.gif' }}" alt="Основная структура" class="diagram-img" />
+                  {% set viewbox_inner = diagram_inner_viewbox or diagram_viewbox or '0 0 400 200' %}
+                  {% set inner_data = diagram_inner_data or {} %}
+                  {% if inner_data and diagram.zones %}
+                  <div class="diagram-overlay" aria-hidden="true">
+                    <svg viewBox="{{ viewbox_inner }}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                      {% for z in diagram.zones %}
+                      {% if z.zone_id and z.code and inner_data.get(z.zone_id) and (diagram_code_icons or {}).get(z.code) %}
+                      {% set i = inner_data[z.zone_id] %}
+                      <image x="{{ i.cx - icon_size / 2 }}" y="{{ i.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ diagram_code_icons[z.code] }}" />
+                      {% endif %}
+                      {% endfor %}
+                    </svg>
+                  </div>
+                  {% endif %}
+                </div>
+                <figcaption>Основная структура</figcaption>
+              </figure>
             </div>
+            {% if diagram.zones %}
+            <table class="diagram-zones">
+              <thead><tr><th>Элемент</th><th>Состояние</th></tr></thead>
+              <tbody>
+              {% for z in diagram.zones %}
+              {% set joined = z.codes | join(', ') %}
+              {% set zc = zone_codes_class(joined) %}
+              <tr><td>{{ z.zone }}</td><td{% if zc %} class="{{ zc }}"{% endif %}>{{ joined }}</td></tr>
+              {% endfor %}
+              </tbody>
+            </table>
             {% endif %}
           </div>
-          <figcaption>Внешние панели</figcaption>
-        </figure>
-        <figure>
-          <div class="diagram-figure-wrap">
-            <img src="{{ diagram_inner_src or 'https://www.encar.com/images/pop/check/img_inspection02_new.gif' }}" alt="Основная структура" class="diagram-img" />
-            {% set viewbox_inner = diagram_inner_viewbox or diagram_viewbox or '0 0 400 200' %}
-            {% set inner_data = diagram_inner_data or {} %}
-            {% if inner_data and diagram.zones %}
-            <div class="diagram-overlay" aria-hidden="true">
-              <svg viewBox="{{ viewbox_inner }}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-                {% for z in diagram.zones %}
-                {% if z.zone_id and z.code and inner_data.get(z.zone_id) and (diagram_code_icons or {}).get(z.code) %}
-                {% set i = inner_data[z.zone_id] %}
-                <image x="{{ i.cx - icon_size / 2 }}" y="{{ i.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ diagram_code_icons[z.code] }}" />
-                {% endif %}
-                {% endfor %}
-              </svg>
-            </div>
-            {% endif %}
-          </div>
-          <figcaption>Основная структура</figcaption>
-        </figure>
-      </div>
-      {% if diagram.zones %}
-      <table class="diagram-zones">
-        <thead><tr><th>Элемент</th><th>Состояние</th></tr></thead>
-        <tbody>
-        {% for z in diagram.zones %}
-        <tr><td>{{ z.zone }}</td><td>{{ z.codes | join(', ') }}</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-      {% endif %}
-    </div>
-    {% endif %}
+        </div>
+        {% endif %}
 
-    {% if detail %}
-    <div class="section">
-      <h2>Детальная диагностика</h2>
-      <table class="detail-table">
-        <thead><tr><th>Узел</th><th>Позиция</th><th>Состояние</th></tr></thead>
-        <tbody>
-        {% set _prev_device = namespace(value='') %}
-        {% for row in detail %}
-        <tr>
-          <td class="detail-device">{% if row.device != _prev_device.value %}{{ row.device }}{% set _prev_device.value = row.device %}{% endif %}</td>
-          <td>{{ row.item }}</td>
-          <td>{{ row.status }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+        {% if has_detail %}
+        <div class="report-tab-panel{% if ns.first == 'detail' %} is-visible{% endif %}" id="panel-detail" role="tabpanel">
+          <div class="section-inner">
+            <h3>Детальная диагностика</h3>
+            <table class="detail-table">
+              <thead><tr><th>Узел</th><th>Позиция</th><th>Состояние</th></tr></thead>
+              <tbody>
+              {% set _prev_device = namespace(value='') %}
+              {% for row in detail %}
+              <tr>
+                <td class="detail-device">{% if row.device != _prev_device.value %}{{ row.device }}{% set _prev_device.value = row.device %}{% endif %}</td>
+                <td>{{ row.item }}</td>
+                <td>{{ tone_status(row.status) }}</td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+      </div>
     </div>
     {% endif %}
   </div>
+
+  <script>
+  (function () {
+    var buttons = document.querySelectorAll('.report-tab-btn');
+    var panels = document.querySelectorAll('.report-tab-panel');
+    if (!buttons.length || !panels.length) return;
+    function showPanel(target) {
+      buttons.forEach(function (b) {
+        var on = b.getAttribute('data-target') === target;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      panels.forEach(function (p) {
+        var on = p.id === 'panel-' + target;
+        p.classList.toggle('is-visible', on);
+        if (on) {
+          p.style.animation = 'none';
+          void p.offsetWidth;
+          p.style.removeProperty('animation');
+        }
+      });
+    }
+    buttons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        showPanel(btn.getAttribute('data-target'));
+      });
+    });
+  })();
+  </script>
 </body>
 </html>
