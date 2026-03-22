@@ -111,9 +111,18 @@
     .detail-table .detail-device { min-width: 10em; }
 
     .diagram-legend-caption { margin: 0 0 0.5rem 0; font-size: var(--text-sm); color: var(--wra-text-muted); }
-    .diagram-legend { list-style: none; margin: 0 0 1rem 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; font-size: var(--text-sm); }
-    .diagram-legend li { display: flex; align-items: center; gap: 0.4rem; }
-    .diagram-legend-icon { width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; }
+    .diagram-legend { list-style: none; margin: 0 0 1rem 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem 0.5rem; font-size: var(--text-sm); }
+    .diagram-legend li {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 0.65rem;
+      background: var(--wra-gray-50);
+      border: 1px solid var(--wra-gray-200);
+      border-radius: var(--radius-md);
+      color: var(--wra-gray-800);
+      font-weight: 500;
+      box-shadow: var(--shadow-sm);
+    }
+    .diagram-legend-icon { width: 24px; height: 24px; flex-shrink: 0; object-fit: contain; }
     .diagram-images { display: flex; flex-wrap: wrap; gap: var(--space-6); margin-bottom: 1rem; }
     .diagram-images figure { margin: 0; text-align: center; }
     .diagram-figure-wrap { position: relative; display: inline-block; max-width: 100%; }

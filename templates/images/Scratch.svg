@@ -1,21 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 500 500">
-  <!-- Generator: Adobe Illustrator 30.1.0, SVG Export Plug-In . SVG Version: 2.1.1 Build 136)  -->
-  <defs>
-    <style>
-      .st0 {
-        fill: #5680c1;
-      }
-
-      .st1 {
-        fill: #fff;
-        font-family: SegoeUI-Bold, 'Segoe UI';
-        font-size: 400px;
-        font-weight: 700;
-        isolation: isolate;
-      }
-    </style>
-  </defs>
-  <circle id="Background" class="st0" cx="250" cy="250" r="240"/>
-  <text class="st1" transform="translate(137.89 398.86)"><tspan x="0" y="0">S</tspan></text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+  <circle cx="16" cy="16" r="15" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
+  <path fill="none" stroke="#6b7280" stroke-width="1.6" stroke-linecap="round"
+        d="M9 22l14-12M8 18l12-10M11 24l11-9"/>
+  <path fill="none" stroke="#dc2626" stroke-width="0.9" stroke-linecap="round" opacity="0.85" d="M10 21l13-11"/>
 </svg>
