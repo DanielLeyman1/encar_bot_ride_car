@@ -308,7 +308,7 @@ DIAGRAM_CODE_ICONS = {
     "DENT": "Repair.svg",
     "DAMAGE": "Damage.svg",
 }
-# Подписи легенды (код → рус.)
+# Подписи легенды (код → рус.); METAL на схеме делится: внешний вид — окрас, внутренний — сварка (Welding.svg)
 DIAGRAM_LEGEND_LABELS = {
     "CHANGE": "Замена",
     "METAL": "Окрас/сварка",
@@ -317,6 +317,7 @@ DIAGRAM_LEGEND_LABELS = {
     "DENT": "Вмятина",
     "DAMAGE": "Повреждение",
 }
+DIAGRAM_LEGEND_ORDER = ("CHANGE", "METAL", "CORROSION", "SCRATCH", "DENT", "DAMAGE")
 DIAGRAM_VIEWBOX = "0 0 400 200"
 # Канонические размеры схем (один вид сверху на каждое изображение), для масштабирования
 DIAGRAM_OUTER_CANONICAL = (400, 200)
@@ -583,7 +584,36 @@ def _render_report_template(data_ru: dict, base_dir: Path | None = None, use_fil
                 diagram_code_icons[code] = f"data:image/svg+xml;base64,{_b64.b64encode(raw).decode('ascii')}"
             except Exception:
                 pass
+    diagram_outer_code_icons = dict(diagram_code_icons)
+    diagram_inner_code_icons = dict(diagram_code_icons)
+    welding_path = images_dir / "Welding.svg"
+    if "METAL" in diagram_code_icons and welding_path.exists():
+        try:
+            raw_w = welding_path.read_bytes()
+            diagram_inner_code_icons["METAL"] = (
+                f"data:image/svg+xml;base64,{_b64.b64encode(raw_w).decode('ascii')}"
+            )
+        except Exception:
+            pass
+    diagram_legend_items: list[dict] = []
+    for code in DIAGRAM_LEGEND_ORDER:
+        if code not in diagram_code_icons:
+            continue
+        label = DIAGRAM_LEGEND_LABELS.get(code, code)
+        if code == "METAL":
+            ou = diagram_outer_code_icons.get("METAL")
+            iu = diagram_inner_code_icons.get("METAL")
+            if ou and iu and iu != ou:
+                diagram_legend_items.append({"src": ou, "label": "Окрас внешних панелей"})
+                diagram_legend_items.append({"src": iu, "label": "Сварка и окрас силовой структуры"})
+            elif ou:
+                diagram_legend_items.append({"src": ou, "label": label})
+        else:
+            diagram_legend_items.append({"src": diagram_code_icons[code], "label": label})
     data_ru["diagram_code_icons"] = diagram_code_icons
+    data_ru["diagram_outer_code_icons"] = diagram_outer_code_icons
+    data_ru["diagram_inner_code_icons"] = diagram_inner_code_icons
+    data_ru["diagram_legend_items"] = diagram_legend_items
     data_ru["diagram_legend_labels"] = DIAGRAM_LEGEND_LABELS
     data_ru["diagram_icon_size"] = DIAGRAM_ICON_SIZE
 

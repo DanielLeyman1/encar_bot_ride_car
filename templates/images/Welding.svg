@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 500 500">
+  <!-- Generator: Adobe Illustrator 30.2.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 1)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #2e9ebc;
+      }
+
+      .st1 {
+        fill: #fff;
+      }
+
+      .st2 {
+        isolation: isolate;
+      }
+    </style>
+  </defs>
+  <circle id="Background" class="st0" cx="250" cy="250" r="240"/>
+  <g class="st2">
+    <g class="st2">
+      <path class="st1" d="M328.7,183.75h-86.47v60.16h79.47v44.78h-79.47v95.19h-55.2v-245.07h141.67v44.95Z"/>
+    </g>
+  </g>
+</svg>

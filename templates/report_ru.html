@@ -134,12 +134,12 @@
 {% elif has_detail %}{% set ns.first = 'detail' %}
 {% endif %}
 
-{# Тон статуса диагностики (рус./кор.) #}
+{# Тон статуса диагностики: «нет / норма / без дефекта» — хорошо; «да / есть дефект» — плохо (как на Encar). #}
 {% macro tone_status(text) -%}
 {%- set t = (text|string)|lower|replace('ё', 'е')|trim -%}
-{%- if t in ['хорошо', 'да', 'норма', 'нормально', 'отлично', 'исправно', '양호', '적정', '정상', '없음'] -%}
+{%- if t in ['хорошо', 'норма', 'нормально', 'отлично', 'исправно', 'нет', '양호', '적정', '정상', '없음', '아니오'] -%}
 <span class="value-tone value-tone-good">{{ text }}</span>
-{%- elif t in ['плохо', 'нет', 'неисправно', '불량'] or 'замен' in t or 'трещин' in t or 'поврежд' in t or 'корроз' in t or '누유' in t or '누수' in t or '교체' in t or '도장' in t -%}
+{%- elif t in ['да', 'плохо', 'неисправно', '불량', '있음'] or 'замен' in t or 'трещин' in t or 'поврежд' in t or 'корроз' in t or '누유' in t or '누수' in t or '교체' in t or '도장' in t -%}
 <span class="value-tone value-tone-bad">{{ text }}</span>
 {%- elif 'микро' in t or 'легк' in t or '미세' in t -%}
 <span class="value-tone value-tone-warn">{{ text }}</span>
@@ -203,6 +203,7 @@
           {% if summary %}
           <div class="section-inner">
             <h3>Общее состояние</h3>
+            <p class="diagram-legend-caption">Строка «Комплектация по опциям» — проверка Encar на расхождения в основных опциях; <strong>«Нет»</strong> значит расхождений нет (норма), <strong>«Да»</strong> — зафиксировано несоответствие.</p>
             <table>
               <thead><tr><th>Позиция</th><th>Состояние</th><th>Значение</th></tr></thead>
               <tbody>
@@ -213,17 +214,15 @@
                 <td>{% set v = row.value or '' %}
                   {% set v_lower = (v|lower)|trim %}
                   {% set lbl = row.label %}
-                  {% if lbl in ['Тюнинг', 'Особая история', 'Смена назначения'] %}
+                  {% if lbl in ['Тюнинг', 'Особая история', 'Смена назначения', 'Комплектация по опциям', 'Основные опции', 'Реколл'] %}
                   {% if v_lower == 'да' %}<span class="value-bad pill">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-good pill">{{ v }}</span>{% else %}{{ v }}{% endif %}
-                  {% elif lbl in ['Основные опции', 'Реколл'] %}
-                  {% if v_lower == 'да' %}<span class="value-good pill">{{ v }}</span>{% elif v_lower == 'нет' %}<span class="value-bad pill">{{ v }}</span>{% else %}{{ v }}{% endif %}
                   {% else %}
                   {% set actual = row.value_actual %}
                   {% if not actual and v %}{% set parts = v.split() %}{% if parts|length >= 2 and parts[-1] in ['Да', 'Нет', 'хорошо', 'плохо'] %}{% set actual = parts[-1] %}{% endif %}{% endif %}
                   {% if actual %}
                   {{ v|replace(actual, '<span class="value-actual">' ~ actual ~ '</span>')|safe }}
-                  {% elif v_lower in ('плохо', 'нет') %}<span class="value-bad pill">{{ row.value }}</span>
-                  {% elif v_lower in ('хорошо', 'да') %}<span class="value-good pill">{{ row.value }}</span>
+                  {% elif v_lower == 'плохо' %}<span class="value-bad pill">{{ row.value }}</span>
+                  {% elif v_lower == 'хорошо' %}<span class="value-good pill">{{ row.value }}</span>
                   {% else %}{{ row.value }}{% endif %}
                   {% endif %}
                 </td>
@@ -262,12 +261,11 @@
         <div class="report-tab-panel{% if ns.first == 'diagram' %} is-visible{% endif %}" id="panel-diagram" role="tabpanel">
           <div class="section-inner section-diagram">
             <h3>Схема состояния кузова</h3>
-            <p class="diagram-legend-caption">Обозначения:</p>
+            <p class="diagram-legend-caption">Обозначения на схемах: на виде внешних панелей метка «окрас», на виде силовой структуры — «сварка/кузовные работы» (один код METAL на Encar, разные значки).</p>
             <ul class="diagram-legend">
-              {% set code_icons = diagram_code_icons or {} %}
-              {% for code, label in (diagram_legend_labels or {}).items() %}
-              {% if code_icons.get(code) %}
-              <li><img src="{{ code_icons[code] }}" alt="" class="diagram-legend-icon" /> {{ label }}</li>
+              {% for item in (diagram_legend_items or []) %}
+              {% if item.src %}
+              <li><img src="{{ item.src }}" alt="" class="diagram-legend-icon" /> {{ item.label }}</li>
               {% endif %}
               {% endfor %}
             </ul>
@@ -282,9 +280,10 @@
                   <div class="diagram-overlay" aria-hidden="true">
                     <svg viewBox="{{ viewbox_outer }}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
                       {% for z in diagram.zones %}
-                      {% if z.zone_id and z.code and outer_data.get(z.zone_id) and (diagram_code_icons or {}).get(z.code) %}
+                      {% set outer_icons = diagram_outer_code_icons or diagram_code_icons or {} %}
+                      {% if z.zone_id and z.code and outer_data.get(z.zone_id) and outer_icons.get(z.code) %}
                       {% set o = outer_data[z.zone_id] %}
-                      <image x="{{ o.cx - icon_size / 2 }}" y="{{ o.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ diagram_code_icons[z.code] }}" />
+                      <image x="{{ o.cx - icon_size / 2 }}" y="{{ o.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ outer_icons[z.code] }}" />
                       {% endif %}
                       {% endfor %}
                     </svg>
@@ -302,9 +301,10 @@
                   <div class="diagram-overlay" aria-hidden="true">
                     <svg viewBox="{{ viewbox_inner }}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
                       {% for z in diagram.zones %}
-                      {% if z.zone_id and z.code and inner_data.get(z.zone_id) and (diagram_code_icons or {}).get(z.code) %}
+                      {% set inner_icons = diagram_inner_code_icons or diagram_code_icons or {} %}
+                      {% if z.zone_id and z.code and inner_data.get(z.zone_id) and inner_icons.get(z.code) %}
                       {% set i = inner_data[z.zone_id] %}
-                      <image x="{{ i.cx - icon_size / 2 }}" y="{{ i.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ diagram_code_icons[z.code] }}" />
+                      <image x="{{ i.cx - icon_size / 2 }}" y="{{ i.cy - icon_size / 2 }}" width="{{ icon_size }}" height="{{ icon_size }}" href="{{ inner_icons[z.code] }}" />
                       {% endif %}
                       {% endfor %}
                     </svg>
