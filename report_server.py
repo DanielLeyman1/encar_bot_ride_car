@@ -57,7 +57,7 @@ def serve_report(token: str):
 
 
 def run_server(port: int = None, reports_dir: Path = None, data_dir: Path = None, template_dir: Path = None) -> None:
-    port = port or int(os.environ.get("REPORT_SERVER_PORT", "8080"))
+    port = port or int(os.environ.get("REPORT_SERVER_PORT", "9090"))
     base = Path(__file__).resolve().parent
     reports_dir = reports_dir or base / "reports"
     data_dir = data_dir or base / "data"

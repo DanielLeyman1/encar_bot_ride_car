@@ -20,7 +20,8 @@ REPORTS_DIR = Path(os.environ.get("REPORTS_DIR", "reports"))
 DATA_DIR = Path(__file__).resolve().parent / "data"
 # Публичный URL для ссылок /r/<token> (nginx проксирует на этот хост). Пустая строка в env отключает выдачу ссылки.
 BASE_URL = os.environ.get("REPORT_BASE_URL", "https://www.wrideauto.ru").rstrip("/")
-REPORT_SERVER_PORT = int(os.environ.get("REPORT_SERVER_PORT", "8080"))
+# Порт Flask для /r/<token>. По умолчанию 9090 — чтобы не пересекаться с API каталога на 8080.
+REPORT_SERVER_PORT = int(os.environ.get("REPORT_SERVER_PORT", "9090"))
 
 # Сообщение для обычных пользователей (только админ запрашивает отчёты)
 NON_ADMIN_MESSAGE = (
