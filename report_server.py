@@ -43,13 +43,18 @@ def init_report_server(reports_dir: Path, data_dir: Path, template_dir: Path) ->
 
 @app.route("/r/<token>")
 def serve_report(token: str):
-    if _DATA_DIR is None:
+    if _DATA_DIR is None or _REPORTS_DIR is None:
         return _EXPIRED_HTML or "Отчёт устарел.", 404, {"Content-Type": "text/html; charset=utf-8"}
-    report_path, expired = get_report_path(token, _DATA_DIR)
-    if expired or report_path is None or not report_path.exists():
+    cached_path, expired = get_report_path(token, _DATA_DIR)
+    if expired or cached_path is None:
+        return _EXPIRED_HTML or "Отчёт устарел.", 200, {"Content-Type": "text/html; charset=utf-8"}
+    # Файл на диске всегда <token>.html (см. report_cache.save_report)
+    html_file = _REPORTS_DIR / f"{token}.html"
+    path_to_send = html_file if html_file.exists() else cached_path
+    if not path_to_send.exists():
         return _EXPIRED_HTML or "Отчёт устарел.", 200, {"Content-Type": "text/html; charset=utf-8"}
     return send_file(
-        report_path,
+        path_to_send,
         mimetype="text/html; charset=utf-8",
         as_attachment=False,
         download_name=None,
