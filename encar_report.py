@@ -26,37 +26,82 @@ def _debug_log(location: str, message: str, data: dict | None = None, hypothesis
 # #endregion
 
 # Прокси для доступа к Encar (Корея). Выключить: REPORT_PROXY=0
-def _report_proxy():
-    if os.environ.get("REPORT_PROXY", "1") == "0":
-        return None
-    server = os.environ.get("REPORT_PROXY_SERVER", "http://geo.floppydata.com:10080")
-    if not server.startswith("http"):
-        server = "http://" + server
-    return {
-        "server": server,
-        "username": os.environ.get("REPORT_PROXY_USER", "UciwZyfTPlvUn4OS"),
-        "password": os.environ.get("REPORT_PROXY_PASSWORD", "FDsAIHONGvLKdUlN"),
-    }
-
-
-FALLBACK_PROXY = {
-    "server": "http://geo.floppydata.com:10080",
+# Основной — учётка проекта; резерв — ваша (United States - 2). Старые REPORT_PROXY_USER/PASSWORD
+# больше не подмешиваются в основной канал (частая причина «бага»).
+_REPORT_PROXY_HOST_DEFAULT = "http://geo.floppydata.com:10080"
+_PROJECT_PRIMARY_DEFAULT = {
+    "server": _REPORT_PROXY_HOST_DEFAULT,
+    "username": "UciwZyfTPlvUn4OS",
+    "password": "FDsAIHONGvLKdUlN",
+}
+_USER_RESERVE_DEFAULT = {
+    "server": _REPORT_PROXY_HOST_DEFAULT,
     "username": "44yE6gInasmcVgGy",
     "password": "b3z81xfZLM9YZZgZ",
 }
 
 
+def _proxy_server_from_env(primary: bool) -> str:
+    shared = os.environ.get("REPORT_PROXY_SERVER", _REPORT_PROXY_HOST_DEFAULT)
+    if primary:
+        return os.environ.get("REPORT_PROXY_PRIMARY_SERVER", shared)
+    return os.environ.get("REPORT_PROXY_RESERVE_SERVER", shared)
+
+
+def _normalize_proxy_server(server: str) -> str:
+    s = (server or "").strip()
+    if not s:
+        s = _REPORT_PROXY_HOST_DEFAULT
+    if not s.startswith("http"):
+        s = "http://" + s
+    return s.rstrip("/")
+
+
+def _build_proxy(server: str, username: str, password: str) -> dict:
+    return {
+        "server": _normalize_proxy_server(server),
+        "username": username,
+        "password": password,
+    }
+
+
+def _primary_report_proxy() -> dict | None:
+    if os.environ.get("REPORT_PROXY", "1") == "0":
+        return None
+    return _build_proxy(
+        _proxy_server_from_env(primary=True),
+        os.environ.get("REPORT_PROXY_PRIMARY_USER", _PROJECT_PRIMARY_DEFAULT["username"]),
+        os.environ.get("REPORT_PROXY_PRIMARY_PASSWORD", _PROJECT_PRIMARY_DEFAULT["password"]),
+    )
+
+
+def _reserve_report_proxy() -> dict | None:
+    if os.environ.get("REPORT_PROXY", "1") == "0":
+        return None
+    return _build_proxy(
+        _proxy_server_from_env(primary=False),
+        os.environ.get("REPORT_PROXY_RESERVE_USER", _USER_RESERVE_DEFAULT["username"]),
+        os.environ.get("REPORT_PROXY_RESERVE_PASSWORD", _USER_RESERVE_DEFAULT["password"]),
+    )
+
+
+def _proxies_equivalent(a: dict, b: dict) -> bool:
+    return (
+        a.get("server") == b.get("server")
+        and a.get("username") == b.get("username")
+        and a.get("password") == b.get("password")
+    )
+
+
 def _report_proxy_candidates() -> list[dict | None]:
-    """Возвращает список вариантов прокси: основной + резервный."""
-    primary = _report_proxy()
+    """Сначала основной прокси проекта, затем резервный (ваш)."""
+    primary = _primary_report_proxy()
     if primary is None:
         return [None]
     out = [primary]
-    if (
-        primary.get("server") != FALLBACK_PROXY["server"]
-        or primary.get("username") != FALLBACK_PROXY["username"]
-    ):
-        out.append(dict(FALLBACK_PROXY))
+    reserve = _reserve_report_proxy()
+    if reserve is not None and not _proxies_equivalent(primary, reserve):
+        out.append(reserve)
     return out
 
 
