@@ -748,6 +748,45 @@ def _has_main_report_content(data: dict) -> bool:
     return bool(data.get("basic")) or bool(data.get("summary")) or bool(data.get("detail"))
 
 
+def _html_is_upstream_error(html: str) -> bool:
+    """502/503 от прокси или Encar — короткая страница с типичным текстом."""
+    if not html:
+        return True
+    low = html.lower()
+    if "502 bad gateway" in low or "503 service unavailable" in low or "504 gateway time-out" in low:
+        return True
+    if "bad gateway" in low and len(html) < 2000:
+        return True
+    if "cloudflare" in low and "error" in low and len(html) < 4000:
+        return True
+    return False
+
+
+def _encar_iframe_src_skip(src: str) -> bool:
+    """Не переходить в iframe картинок/схемы — за прокси часто 502; таблицы на inspectionViewNew."""
+    low = (src or "").lower()
+    if not low or "encar" not in low:
+        return True
+    if "inspectionimgview" in low or "inspection_img_view" in low:
+        return True
+    return False
+
+
+def _pick_encar_iframe_src(urls: list[str]) -> str:
+    """Из списка src iframe выбрать URL текстового отчёта, не картинки."""
+    encar = [u.strip() for u in urls if u and u.strip() and not _encar_iframe_src_skip(u.strip())]
+    if not encar:
+        return ""
+    low = [u.lower() for u in encar]
+    for i, u in enumerate(encar):
+        if "inspectionviewnew" in low[i]:
+            return u
+    for i, u in enumerate(encar):
+        if "mdsl_regcar" in low[i] and "method=" in low[i]:
+            return u
+    return encar[0]
+
+
 def _encar_html_quality_score(html: str) -> int:
     """Эвристика: насколько похоже на страницу отчёта Encar (а не оболочку / капчу)."""
     if not html:
@@ -791,6 +830,7 @@ def _log_encar_probe(html: str, page_url: str) -> None:
     low = html.lower()
     hints = [w for w in (
         "captcha", "robot", "cloudflare", "access denied", "403 forbidden", "404",
+        "bad gateway", "502", "503", "504",
         "차단", "로그인", "login", "sorry", "blocked",
     ) if w in low]
     n_ifr = low.count("<iframe")
@@ -858,22 +898,24 @@ async def _wait_until_encar_markup(page, nav_timeout_ms: int) -> None:
             break
 
 
-async def _goto_encar_iframe_src(page, nav_timeout_ms: int) -> bool:
+async def _goto_encar_iframe_src(page, nav_timeout_ms: int, carid: str) -> bool:
     """
     Если отчёт в iframe с собственным URL Encar — переходим в этот URL в текущей вкладке.
-    Так Playwright получает полный HTML таблиц (оболочка верхнего уровня часто score=0).
+    Первый iframe на странице часто inspectionImgView (схема) — его пропускаем: за прокси даёт 502.
     """
+    report_main = REPORT_URL.format(carid=carid)
     try:
-        src = await page.evaluate(
-            """() => {
-                const el = document.querySelector('iframe[src], frame[src]');
-                return el && el.src ? el.src : '';
-            }"""
+        urls = await page.evaluate(
+            """() => Array.from(document.querySelectorAll('iframe[src], frame[src]'))
+                .map(el => (el.src || '').trim())
+                .filter(Boolean);"""
         )
     except Exception:
-        src = ""
-    src = (src or "").strip()
-    if not src or "encar" not in src.lower():
+        urls = []
+    if not isinstance(urls, list):
+        urls = []
+    src = _pick_encar_iframe_src(urls)
+    if not src:
         return False
     try:
         cur = (page.url or "").strip()
@@ -882,12 +924,24 @@ async def _goto_encar_iframe_src(page, nav_timeout_ms: int) -> bool:
     a, b = src.split("#")[0].rstrip("/"), cur.split("#")[0].rstrip("/")
     if a == b:
         return False
-    _log(f"REPORT_MAPPED: перехожу на URL из iframe (длина {len(src)} симв.)")
+    _log(f"REPORT_MAPPED: перехожу на URL из iframe (не ImgView), {len(src)} симв.")
     await page.goto(src, wait_until="domcontentloaded", timeout=nav_timeout_ms)
     try:
         await page.wait_for_load_state("load", timeout=min(12_000, nav_timeout_ms))
     except Exception:
         pass
+    try:
+        html_quick, _ = await _best_encar_page_html(page)
+    except Exception:
+        html_quick = ""
+    if _html_is_upstream_error(html_quick):
+        _log("REPORT_MAPPED: iframe/страница — 502/ошибка шлюза, возврат на inspectionViewNew")
+        await page.goto(report_main, wait_until="domcontentloaded", timeout=nav_timeout_ms)
+        try:
+            await page.wait_for_load_state("load", timeout=min(12_000, nav_timeout_ms))
+        except Exception:
+            pass
+        return True
     return True
 
 
@@ -998,7 +1052,7 @@ async def fetch_report_pdf_mapped(
                         await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
                         _probe_h, _probe_s = await _best_encar_page_html(page)
                         if _probe_s < 3:
-                            if await _goto_encar_iframe_src(page, NAV_TIMEOUT_MS):
+                            if await _goto_encar_iframe_src(page, NAV_TIMEOUT_MS, carid):
                                 await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
                         try:
                             await page.evaluate(
@@ -1018,6 +1072,17 @@ async def fetch_report_pdf_mapped(
                         parsed_main = False
                         # Encar иногда дорисовывает таблицы позже — несколько попыток, затем частичный отчёт.
                         for parse_try in range(5):
+                            try:
+                                if "inspectionimgview" in (page.url or "").lower():
+                                    _log("REPORT_MAPPED: вкладка на inspectionImgView → inspectionViewNew (таблицы)")
+                                    await page.goto(
+                                        REPORT_URL.format(carid=carid),
+                                        wait_until="domcontentloaded",
+                                        timeout=NAV_TIMEOUT_MS,
+                                    )
+                                    await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
+                            except Exception:
+                                pass
                             html, html_q = await _best_encar_page_html(page)
                             if html_q <= 0:
                                 try:
@@ -1038,7 +1103,7 @@ async def fetch_report_pdf_mapped(
                             )
                             await page.wait_for_timeout(2200)
                             if parse_try == 1 and html_q <= 0:
-                                if await _goto_encar_iframe_src(page, NAV_TIMEOUT_MS):
+                                if await _goto_encar_iframe_src(page, NAV_TIMEOUT_MS, carid):
                                     await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
                             if parse_try == 2:
                                 try:
