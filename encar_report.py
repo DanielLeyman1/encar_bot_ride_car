@@ -748,6 +748,59 @@ def _has_main_report_content(data: dict) -> bool:
     return bool(data.get("basic")) or bool(data.get("summary")) or bool(data.get("detail"))
 
 
+def _encar_html_quality_score(html: str) -> int:
+    """Эвристика: насколько похоже на страницу отчёта Encar (а не оболочку / капчу)."""
+    if not html:
+        return 0
+    low = html.lower()
+    score = 0
+    if "tbl_total" in low:
+        score += 6
+    if "ckst" in low:
+        score += 6
+    if "tbl_detail" in low:
+        score += 5
+    if "tbl_repair" in low:
+        score += 4
+    if "inspec_carinfo" in low:
+        score += 3
+    if "performancecheck" in low and "init" in low:
+        score += 5
+    if "mdsl_regcar" in low:
+        score += 1
+    return score
+
+
+async def _best_encar_page_html(page) -> tuple[str, int]:
+    """
+    Encar часто отдаёт таблицы во вложенном iframe: page.content() тогда пустой для парсера.
+    Обходим все frame и выбираем HTML с максимальным «качеством» разметки отчёта.
+    """
+    best_html = ""
+    best_score = -1
+    try:
+        frames = list(page.frames)
+    except Exception:
+        frames = []
+    for fr in frames:
+        try:
+            h = await fr.content()
+        except Exception:
+            continue
+        sc = _encar_html_quality_score(h)
+        if sc > best_score:
+            best_score = sc
+            best_html = h
+    if not best_html:
+        try:
+            best_html = await page.content()
+            best_score = _encar_html_quality_score(best_html)
+        except Exception:
+            best_html = ""
+            best_score = 0
+    return best_html, best_score
+
+
 def _has_any_report_ru(data_ru: dict) -> bool:
     """Есть ли хоть что-то для отображения после маппинга."""
     if data_ru.get("basic"):
@@ -849,13 +902,26 @@ async def fetch_report_pdf_mapped(
                             await page.wait_for_selector(".inspec_carinfo, #bodydiv", timeout=min(25_000, NAV_TIMEOUT_MS))
                         except Exception:
                             pass
-                        # Ждём появления таблиц отчёта (контент может подгружаться динамически)
-                        for selector in ["table.tbl_total", ".inspec_carinfo table.ckst", "table.tbl_detail"]:
-                            try:
-                                await page.wait_for_selector(selector, timeout=min(18_000, NAV_TIMEOUT_MS))
-                                break
-                            except Exception:
-                                pass
+                        # Отчёт часто в iframe — ждём кадр и таблицы внутри любого frame
+                        try:
+                            await page.wait_for_selector("iframe", timeout=min(15_000, NAV_TIMEOUT_MS))
+                        except Exception:
+                            pass
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=18_000)
+                        except Exception:
+                            pass
+                        for fr in list(page.frames):
+                            for selector in (
+                                "table.tbl_total",
+                                "table.ckst",
+                                ".inspec_carinfo table",
+                                "table.tbl_detail",
+                            ):
+                                try:
+                                    await fr.wait_for_selector(selector, timeout=6000)
+                                except Exception:
+                                    continue
                         try:
                             await page.evaluate(
                                 "() => { window.scrollTo(0, document.body.scrollHeight); }"
@@ -874,7 +940,12 @@ async def fetch_report_pdf_mapped(
                         parsed_main = False
                         # Encar иногда дорисовывает таблицы позже — несколько попыток, затем частичный отчёт.
                         for parse_try in range(5):
-                            html = await page.content()
+                            html, html_q = await _best_encar_page_html(page)
+                            if html_q <= 0:
+                                _log(
+                                    f"REPORT_MAPPED: низкий score HTML ({html_q}), попытка {parse_try + 1}/5 "
+                                    "(часто iframe/капча/ошибка Encar)"
+                                )
                             data = parse_report_html(html)
                             if _has_main_report_content(data):
                                 data_ru, missing = apply_mapping(data, mapping, return_missing=True)
@@ -893,7 +964,7 @@ async def fetch_report_pdf_mapped(
                                 except Exception:
                                     pass
                         if not parsed_main:
-                            html = await page.content()
+                            html, _hq = await _best_encar_page_html(page)
                             data = parse_report_html(html)
                             data_ru, missing = apply_mapping(data, mapping, return_missing=True)
                             if not _has_any_report_ru(data_ru):

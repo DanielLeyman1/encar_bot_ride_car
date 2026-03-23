@@ -21,22 +21,21 @@ def _text(el) -> str:
     return _strip(el.get_text() if hasattr(el, "get_text") else str(el))
 
 
-def parse_report_html(html: str) -> dict[str, Any]:
-    """
-    Парсит HTML отчёта Encar. Возвращает:
-    - basic: dict { "차명": "ES300h...", "연식": "2021년", ... }
-    - summary: list of { "label": "주행거리", "status": "양호", "value": "95,023km" }
-    - repair: list of { "label": "사고이력", "value": "있음" }
-    - detail: list of { "device": "원동기", "item": "작동상태", "status": "양호" }
-    """
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, "html.parser")
-    out = {"basic": {}, "summary": [], "repair": [], "detail": []}
-
-    # 1) Основная таблица .inspec_carinfo table.ckst — в каждой строке пары th+td, th+td
-    table_basic = soup.select_one(".inspec_carinfo table.ckst")
-    if table_basic:
-        for tr in table_basic.select("tbody tr"):
+def _parse_basic_table(soup, out: dict) -> None:
+    selectors = (
+        ".inspec_carinfo table.ckst",
+        ".inspec_carinfo table",
+        "div.inspec_carinfo table",
+        "table.ckst",
+    )
+    for sel in selectors:
+        table_basic = soup.select_one(sel)
+        if not table_basic:
+            continue
+        rows = table_basic.select("tbody tr")
+        if not rows:
+            continue
+        for tr in rows:
             cells = tr.find_all(["th", "td"])
             i = 0
             while i < len(cells) - 1:
@@ -48,102 +47,186 @@ def parse_report_html(html: str) -> dict[str, Any]:
                     i += 2
                 else:
                     i += 1
+        if out["basic"]:
+            return
 
-    # 2) Таблица общего состояния .tbl_total
-    table_total = soup.select_one("table.tbl_total")
-    if table_total:
-        for tr in table_total.select("tbody tr"):
-            th = tr.select_one("th[scope=row]")
-            if not th:
-                continue
-            label = _text(th)
-            # Статус: .txt_state.on или первый .txt_state
-            status_el = tr.select_one(".txt_state.on") or tr.select_one(".txt_state")
-            status = _text(status_el) if status_el else ""
-            # Значение: .txt_detail или вторая td; актуальный выбор — .txt_state.on внутри ячейки
-            detail_el = tr.select_one(".txt_detail")
-            value = _text(detail_el) if detail_el else ""
-            value_actual = ""
-            if detail_el:
-                on_el = detail_el.select_one(".txt_state.on")
-                if on_el:
-                    value_actual = _text(on_el)
-            if not value and status:
-                tds = tr.select("td.td_left")
-                for td in tds:
-                    t = _text(td)
-                    if t and t != status and not t.startswith("span"):
-                        value = t
-                        break
-            out["summary"].append({"label": label, "status": status, "value": value, "value_actual": value_actual})
 
-    # 3) Секция ремонта .section_repair
-    section_repair = soup.select_one(".section_repair table.tbl_repair")
-    if section_repair:
-        for tr in section_repair.select("tbody tr"):
-            th = tr.select_one("th[scope=row]")
-            if not th:
-                continue
-            label = _text(th)
-            if "자세히" in label or "uibtn" in label:
-                label = re.sub(r"\s*자세히보기\s*", "", label)
-            status_el = tr.select_one(".txt_state.on") or tr.select_one(".txt_state")
-            value = _text(status_el) if status_el else ""
-            out["repair"].append({"label": label, "value": value})
+def _find_summary_table(soup):
+    t = soup.select_one("table.tbl_total") or soup.select_one("table[class*='tbl_total']")
+    if t:
+        return t
+    for table in soup.select("table"):
+        classes = " ".join(table.get("class") or []).lower()
+        if "tbl" in classes and "total" in classes:
+            return table
+    return None
 
-    # 4) Детальная таблица .tbl_detail (упрощённо: строка = устройство + пункт + статус)
-    table_detail = soup.select_one("table.tbl_detail")
-    if table_detail:
-        current_device = ""
-        for tr in table_detail.select("tbody tr"):
-            ths = tr.select("th[scope=row]")
-            tds = tr.select("td.td_left")
-            status_el = tr.select_one(".txt_state.on") or tr.select_one(".txt_state")
-            status = _text(status_el) if status_el else ""
-            if ths:
-                first = _text(ths[0])
-                if first and first not in ("양호", "불량", "없음", "적정", "부족", "미세누유", "누유", "미세누수", "누수"):
-                    if len(ths) >= 2:
-                        current_device = first
-                        item = _text(ths[1])
-                    else:
-                        item = first
-                    out["detail"].append({"device": current_device, "item": item, "status": status})
 
-    # 5) Схема кузова: data из performanceCheck.init({ data: {...} })
+def _parse_summary_table(soup, out: dict) -> None:
+    table_total = _find_summary_table(soup)
+    if not table_total:
+        return
+    for tr in table_total.select("tbody tr"):
+        th = tr.select_one("th[scope=row]") or tr.select_one("th")
+        if not th:
+            continue
+        label = _text(th)
+        status_el = tr.select_one(".txt_state.on") or tr.select_one(".txt_state")
+        status = _text(status_el) if status_el else ""
+        detail_el = tr.select_one(".txt_detail")
+        value = _text(detail_el) if detail_el else ""
+        value_actual = ""
+        if detail_el:
+            on_el = detail_el.select_one(".txt_state.on")
+            if on_el:
+                value_actual = _text(on_el)
+        if not value and status:
+            for td in tr.select("td.td_left, td"):
+                t = _text(td)
+                if t and t != status and not t.startswith("span"):
+                    value = t
+                    break
+        out["summary"].append(
+            {"label": label, "status": status, "value": value, "value_actual": value_actual}
+        )
+
+
+def _find_repair_table(soup):
+    t = soup.select_one(".section_repair table.tbl_repair")
+    if t:
+        return t
+    t = soup.select_one("table.tbl_repair") or soup.select_one("table[class*='tbl_repair']")
+    if t:
+        return t
+    sec = soup.select_one(".section_repair")
+    if sec:
+        t = sec.select_one("table")
+        if t:
+            return t
+    return None
+
+
+def _parse_repair_table(soup, out: dict) -> None:
+    section_repair = _find_repair_table(soup)
+    if not section_repair:
+        return
+    for tr in section_repair.select("tbody tr"):
+        th = tr.select_one("th[scope=row]") or tr.select_one("th")
+        if not th:
+            continue
+        label = _text(th)
+        if "자세히" in label or "uibtn" in label:
+            label = re.sub(r"\s*자세히보기\s*", "", label)
+        status_el = tr.select_one(".txt_state.on") or tr.select_one(".txt_state")
+        value = _text(status_el) if status_el else ""
+        out["repair"].append({"label": label, "value": value})
+
+
+def _find_detail_table(soup):
+    t = soup.select_one("table.tbl_detail") or soup.select_one("table[class*='tbl_detail']")
+    if t:
+        return t
+    for table in soup.select("table"):
+        classes = " ".join(table.get("class") or []).lower()
+        if "detail" in classes and "tbl" in classes:
+            return table
+    return None
+
+
+def _parse_detail_table(soup, out: dict) -> None:
+    table_detail = _find_detail_table(soup)
+    if not table_detail:
+        return
+    current_device = ""
+    for tr in table_detail.select("tbody tr"):
+        ths = tr.select("th[scope=row]") or tr.select("th")
+        status_el = tr.select_one(".txt_state.on") or tr.select_one(".txt_state")
+        status = _text(status_el) if status_el else ""
+        if ths:
+            first = _text(ths[0])
+            if first and first not in (
+                "양호",
+                "불량",
+                "없음",
+                "적정",
+                "부족",
+                "미세누유",
+                "누유",
+                "미세누수",
+                "누수",
+            ):
+                if len(ths) >= 2:
+                    current_device = first
+                    item = _text(ths[1])
+                else:
+                    item = first
+                out["detail"].append({"device": current_device, "item": item, "status": status})
+
+
+def _performance_check_anchor(html: str) -> int:
+    low = html.lower()
+    for key in ("performancecheck.init", "performancecheck"):
+        i = low.find(key)
+        if i != -1:
+            return i
+    return -1
+
+
+def _parse_diagram(html: str, out: dict) -> None:
     out["diagram"] = {"zones": [], "legend_used": []}
-    idx = html.find("performanceCheck.init")
-    if idx != -1:
-        start = html.find("data", idx)
-        if start != -1:
-            colon = html.find(":", start)
-            brace = html.find("{", colon) if colon != -1 else -1
-            if brace != -1:
-                depth = 0
-                end = brace
-                for i in range(brace, min(brace + 50000, len(html))):
-                    if html[i] == "{":
-                        depth += 1
-                    elif html[i] == "}":
-                        depth -= 1
-                        if depth == 0:
-                            end = i
-                            break
-                raw = html[brace : end + 1]
-                try:
-                    # JSON: ключи в кавычках, null → None
-                    zone_data = json.loads(raw)
-                    legend_used = set()
-                    for zone_id, value in zone_data.items():
-                        if value is None or (isinstance(value, list) and len(value) == 0):
-                            continue
-                        codes = value if isinstance(value, list) else [str(value)]
-                        out["diagram"]["zones"].append({"zone": zone_id, "codes": codes})
-                        for c in codes:
-                            legend_used.add(c)
-                    out["diagram"]["legend_used"] = sorted(legend_used)
-                except Exception:
-                    pass
+    idx = _performance_check_anchor(html)
+    if idx == -1:
+        return
+    start = html.find("data", idx)
+    if start == -1:
+        return
+    colon = html.find(":", start)
+    brace = html.find("{", colon) if colon != -1 else -1
+    if brace == -1:
+        return
+    depth = 0
+    end = brace
+    for i in range(brace, min(brace + 50000, len(html))):
+        if html[i] == "{":
+            depth += 1
+        elif html[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    raw = html[brace : end + 1]
+    try:
+        zone_data = json.loads(raw)
+        legend_used = set()
+        for zone_id, value in zone_data.items():
+            if value is None or (isinstance(value, list) and len(value) == 0):
+                continue
+            codes = value if isinstance(value, list) else [str(value)]
+            out["diagram"]["zones"].append({"zone": zone_id, "codes": codes})
+            for c in codes:
+                legend_used.add(c)
+        out["diagram"]["legend_used"] = sorted(legend_used)
+    except Exception:
+        pass
+
+
+def parse_report_html(html: str) -> dict[str, Any]:
+    """
+    Парсит HTML отчёта Encar. Возвращает:
+    - basic: dict { "차명": "ES300h...", "연식": "2021년", ... }
+    - summary: list of { "label": "주행거리", "status": "양호", "value": "95,023km" }
+    - repair: list of { "label": "사고이력", "value": "있음" }
+    - detail: list of { "device": "원동기", "item": "작동상태", "status": "양호" }
+    """
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    out: dict[str, Any] = {"basic": {}, "summary": [], "repair": [], "detail": []}
+
+    _parse_basic_table(soup, out)
+    _parse_summary_table(soup, out)
+    _parse_repair_table(soup, out)
+    _parse_detail_table(soup, out)
+    _parse_diagram(html, out)
 
     return out
 
