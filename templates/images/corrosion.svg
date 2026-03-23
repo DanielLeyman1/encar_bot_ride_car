@@ -1,8 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
-  <circle cx="16" cy="16" r="15" fill="#ffffff" stroke="#e5e7eb" stroke-width="1"/>
-  <ellipse cx="13" cy="14" rx="4" ry="3.5" fill="#fed7aa" opacity="0.95"/>
-  <ellipse cx="18" cy="17" rx="3.5" ry="3" fill="#fdba74" opacity="0.9"/>
-  <ellipse cx="15" cy="19" rx="2.5" ry="2" fill="#c2410c" opacity="0.35"/>
-  <path fill="none" stroke="#9a3412" stroke-width="1.2" stroke-linecap="round"
-        d="M11 12.5q1.5 2 4 1M17 15q2 1.5 3.5 0M12.5 18q2-1 4 .5"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 32 32">
+  <!-- Generator: Adobe Illustrator 30.2.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 1)  -->
+  <defs>
+    <style>
+      .st0 {
+        fill: #fdba74;
+        opacity: .9;
+      }
+
+      .st0, .st1 {
+        isolation: isolate;
+      }
+
+      .st2 {
+        fill: #fff;
+        stroke: #e5e7eb;
+      }
+
+      .st1 {
+        fill: #fed7aa;
+        opacity: .95;
+      }
+    </style>
+  </defs>
+  <circle class="st2" cx="16" cy="16" r="15"/>
+  <ellipse class="st1" cx="16.15" cy="14.79" rx="6.37" ry="5.57"/>
+  <ellipse class="st0" cx="14.15" cy="18.79" rx="4.67" ry="4"/>
 </svg>

@@ -228,7 +228,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         safe_url = html.escape(report_url, quote=True)
         await update.message.reply_text(
-            f"🔗 <a href=\"{safe_url}\">Открыть отчёт в браузере</a>",
+            f"<a href=\"{safe_url}\">Посмотреть отчёт об истории авто</a>",
             parse_mode="HTML",
             disable_web_page_preview=False,
         )
