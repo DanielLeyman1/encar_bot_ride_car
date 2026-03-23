@@ -766,9 +766,38 @@ def _encar_html_quality_score(html: str) -> int:
         score += 3
     if "performancecheck" in low and "init" in low:
         score += 5
-    if "mdsl_regcar" in low:
+    if "mdsl_regcar" in low or "mdsl" in low:
+        score += 2
+    if "inspectionview" in low or "inspectionviewnew" in low:
+        score += 3
+    if "regcar" in low:
+        score += 2
+    # Корейские якоря страницы записи осмотра
+    if "성능" in html or "기록부" in html:
+        score += 3
+    if "차량" in html and "encar" in low:
+        score += 2
+    if "tbl_" in low:
         score += 1
     return score
+
+
+def _log_encar_probe(html: str, page_url: str) -> None:
+    """Диагностика, когда score=0: что реально пришло с Encar."""
+    if html is None:
+        html = ""
+    m = re.search(r"<title[^>]*>\s*([^<]{0,220})", html, re.I | re.DOTALL)
+    title = re.sub(r"\s+", " ", (m.group(1) if m else "").strip())[:200]
+    low = html.lower()
+    hints = [w for w in (
+        "captcha", "robot", "cloudflare", "access denied", "403 forbidden", "404",
+        "차단", "로그인", "login", "sorry", "blocked",
+    ) if w in low]
+    n_ifr = low.count("<iframe")
+    _log(
+        f"REPORT_PROBE: url={page_url[:180]!r} html_len={len(html)} "
+        f"title={title!r} iframes_in_markup={n_ifr} hints={hints or '—'}"
+    )
 
 
 async def _best_encar_page_html(page) -> tuple[str, int]:
@@ -791,6 +820,8 @@ async def _best_encar_page_html(page) -> tuple[str, int]:
         if sc > best_score:
             best_score = sc
             best_html = h
+        elif sc == best_score and sc >= 0 and len(h) > len(best_html):
+            best_html = h
     if not best_html:
         try:
             best_html = await page.content()
@@ -798,7 +829,7 @@ async def _best_encar_page_html(page) -> tuple[str, int]:
         except Exception:
             best_html = ""
             best_score = 0
-    return best_html, best_score
+    return best_html, max(0, best_score)
 
 
 async def _wait_until_encar_markup(page, nav_timeout_ms: int) -> None:
@@ -817,7 +848,7 @@ async def _wait_until_encar_markup(page, nav_timeout_ms: int) -> None:
     while _time.monotonic() - t0 < budget_s:
         try:
             _h, sc = await _best_encar_page_html(page)
-            if sc >= 5:
+            if sc >= 3:
                 return
         except Exception:
             pass
@@ -825,6 +856,39 @@ async def _wait_until_encar_markup(page, nav_timeout_ms: int) -> None:
             await page.wait_for_timeout(350)
         except Exception:
             break
+
+
+async def _goto_encar_iframe_src(page, nav_timeout_ms: int) -> bool:
+    """
+    Если отчёт в iframe с собственным URL Encar — переходим в этот URL в текущей вкладке.
+    Так Playwright получает полный HTML таблиц (оболочка верхнего уровня часто score=0).
+    """
+    try:
+        src = await page.evaluate(
+            """() => {
+                const el = document.querySelector('iframe[src], frame[src]');
+                return el && el.src ? el.src : '';
+            }"""
+        )
+    except Exception:
+        src = ""
+    src = (src or "").strip()
+    if not src or "encar" not in src.lower():
+        return False
+    try:
+        cur = (page.url or "").strip()
+    except Exception:
+        cur = ""
+    a, b = src.split("#")[0].rstrip("/"), cur.split("#")[0].rstrip("/")
+    if a == b:
+        return False
+    _log(f"REPORT_MAPPED: перехожу на URL из iframe (длина {len(src)} симв.)")
+    await page.goto(src, wait_until="domcontentloaded", timeout=nav_timeout_ms)
+    try:
+        await page.wait_for_load_state("load", timeout=min(12_000, nav_timeout_ms))
+    except Exception:
+        pass
+    return True
 
 
 def _has_any_report_ru(data_ru: dict) -> bool:
@@ -932,6 +996,10 @@ async def fetch_report_pdf_mapped(
                         except Exception:
                             pass
                         await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
+                        _probe_h, _probe_s = await _best_encar_page_html(page)
+                        if _probe_s < 3:
+                            if await _goto_encar_iframe_src(page, NAV_TIMEOUT_MS):
+                                await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
                         try:
                             await page.evaluate(
                                 "() => { window.scrollTo(0, document.body.scrollHeight); }"
@@ -952,6 +1020,10 @@ async def fetch_report_pdf_mapped(
                         for parse_try in range(5):
                             html, html_q = await _best_encar_page_html(page)
                             if html_q <= 0:
+                                try:
+                                    _log_encar_probe(html, page.url)
+                                except Exception:
+                                    _log_encar_probe(html, "")
                                 _log(
                                     f"REPORT_MAPPED: низкий score HTML ({html_q}), попытка {parse_try + 1}/5 "
                                     "(часто iframe/капча/ошибка Encar)"
@@ -965,6 +1037,9 @@ async def fetch_report_pdf_mapped(
                                 f"REPORT_MAPPED: нет основных таблиц (basic/summary/detail), попытка {parse_try + 1}/5"
                             )
                             await page.wait_for_timeout(2200)
+                            if parse_try == 1 and html_q <= 0:
+                                if await _goto_encar_iframe_src(page, NAV_TIMEOUT_MS):
+                                    await _wait_until_encar_markup(page, NAV_TIMEOUT_MS)
                             if parse_try == 2:
                                 try:
                                     await page.reload(
