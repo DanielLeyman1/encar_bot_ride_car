@@ -94,7 +94,10 @@ def _proxies_equivalent(a: dict, b: dict) -> bool:
 
 
 def _report_proxy_candidates() -> list[dict | None]:
-    """Сначала основной прокси проекта, затем резервный (ваш)."""
+    """
+    Порядок: основной прокси проекта → резервный (ваш) → при REPORT_PROXY_TRY_DIRECT=1 — без прокси.
+    Прямое подключение часто спасает, если оба HTTP-прокси «висят» до таймаута.
+    """
     primary = _primary_report_proxy()
     if primary is None:
         return [None]
@@ -102,7 +105,19 @@ def _report_proxy_candidates() -> list[dict | None]:
     reserve = _reserve_report_proxy()
     if reserve is not None and not _proxies_equivalent(primary, reserve):
         out.append(reserve)
+    if os.environ.get("REPORT_PROXY_TRY_DIRECT", "1") != "0":
+        out.append(None)
     return out
+
+
+def _report_nav_timeout_ms() -> int:
+    """Таймаут goto/reload (мс). Короткий — быстрее переключаемся на другой прокси / direct."""
+    return max(15_000, int(os.environ.get("REPORT_NAV_TIMEOUT_MS", "90000")))
+
+
+def _report_step_timeout_ms() -> int:
+    """Таймаут тяжёлых шагов: set_content, pdf (мс)."""
+    return max(30_000, int(os.environ.get("REPORT_STEP_TIMEOUT_MS", "180000")))
 
 
 def _log(msg: str) -> None:
@@ -733,6 +748,20 @@ def _has_main_report_content(data: dict) -> bool:
     return bool(data.get("basic")) or bool(data.get("summary")) or bool(data.get("detail"))
 
 
+def _has_any_report_ru(data_ru: dict) -> bool:
+    """Есть ли хоть что-то для отображения после маппинга."""
+    if data_ru.get("basic"):
+        return True
+    if data_ru.get("summary"):
+        return True
+    if data_ru.get("detail"):
+        return True
+    if data_ru.get("repair"):
+        return True
+    zones = (data_ru.get("diagram") or {}).get("zones") or []
+    return bool(zones)
+
+
 async def fetch_report_pdf_mapped(
     carid: str,
     save_path: Path,
@@ -757,10 +786,16 @@ async def fetch_report_pdf_mapped(
     save_path = Path(save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     report_base = base_dir if base_dir is not None else Path(__file__).resolve().parent
-    TIMEOUT_MS = 240000  # 4 минуты (Encar может грузиться долго)
+    NAV_TIMEOUT_MS = _report_nav_timeout_ms()
+    STEP_TIMEOUT_MS = _report_step_timeout_ms()
 
     # #region agent log
-    _debug_log("encar_report.py:fetch_report_pdf_mapped", "entry", {"carid": carid, "timeout_ms": TIMEOUT_MS}, "H5")
+    _debug_log(
+        "encar_report.py:fetch_report_pdf_mapped",
+        "entry",
+        {"carid": carid, "nav_timeout_ms": NAV_TIMEOUT_MS, "step_timeout_ms": STEP_TIMEOUT_MS},
+        "H5",
+    )
     # #endregion
     phase = "start"
     try:
@@ -788,58 +823,87 @@ async def fetch_report_pdf_mapped(
                         if proxy:
                             _log(f"REPORT_MAPPED: прокси #{proxy_idx} {proxy.get('server')} ({proxy.get('username')})")
                         else:
-                            _log("REPORT_MAPPED: прокси отключён")
+                            _log("REPORT_MAPPED: без прокси (прямое подключение)")
                         context = await browser.new_context(
                             viewport={"width": 900, "height": 1200},
                             locale="ko-KR",
                             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                             proxy=proxy,
                         )
-                        context.set_default_navigation_timeout(TIMEOUT_MS)
-                        context.set_default_timeout(TIMEOUT_MS)
+                        context.set_default_navigation_timeout(NAV_TIMEOUT_MS)
+                        context.set_default_timeout(STEP_TIMEOUT_MS)
                         page = await context.new_page()
                         phase = "goto"
                         # #region agent log
                         _debug_log("encar_report.py:before_goto", "before page.goto", {"url": url}, "H1")
                         # #endregion
-                        await page.goto(url, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+                        await page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
                         # #region agent log
                         _debug_log("encar_report.py:after_goto", "page.goto ok", {}, "H1")
                         # #endregion
                         try:
-                            await page.wait_for_selector(".inspec_carinfo, #bodydiv", timeout=20000)
+                            await page.wait_for_load_state("load", timeout=min(45_000, NAV_TIMEOUT_MS))
+                        except Exception:
+                            pass
+                        try:
+                            await page.wait_for_selector(".inspec_carinfo, #bodydiv", timeout=min(25_000, NAV_TIMEOUT_MS))
                         except Exception:
                             pass
                         # Ждём появления таблиц отчёта (контент может подгружаться динамически)
                         for selector in ["table.tbl_total", ".inspec_carinfo table.ckst", "table.tbl_detail"]:
                             try:
-                                await page.wait_for_selector(selector, timeout=10000)
+                                await page.wait_for_selector(selector, timeout=min(18_000, NAV_TIMEOUT_MS))
                                 break
                             except Exception:
                                 pass
-                        await page.wait_for_timeout(2500)
+                        try:
+                            await page.evaluate(
+                                "() => { window.scrollTo(0, document.body.scrollHeight); }"
+                            )
+                            await page.wait_for_timeout(900)
+                            await page.evaluate("() => { window.scrollTo(0, 0); }")
+                        except Exception:
+                            pass
+                        await page.wait_for_timeout(2800)
                         _log("REPORT_MAPPED: страница загружена")
                         await _status("Парсинг таблиц и перевод на русский…")
                         phase = "parse"
                         mapping = load_mapping()
-                        data_ru = {}
+                        data_ru: dict = {}
                         missing = {"labels": {}, "status_words": {}}
-                        # Иногда Encar дорисовывает таблицы позже; пробуем повторный парсинг перед фейлом.
-                        for parse_try in range(3):
+                        parsed_main = False
+                        # Encar иногда дорисовывает таблицы позже — несколько попыток, затем частичный отчёт.
+                        for parse_try in range(5):
                             html = await page.content()
                             data = parse_report_html(html)
                             if _has_main_report_content(data):
                                 data_ru, missing = apply_mapping(data, mapping, return_missing=True)
+                                parsed_main = True
                                 break
-                            _log(f"REPORT_MAPPED: неполный отчёт (только схема), повтор парсинга {parse_try + 1}/3")
-                            await page.wait_for_timeout(2500)
-                            if parse_try == 1:
+                            _log(
+                                f"REPORT_MAPPED: нет основных таблиц (basic/summary/detail), попытка {parse_try + 1}/5"
+                            )
+                            await page.wait_for_timeout(3500)
+                            if parse_try == 2:
                                 try:
-                                    await page.reload(wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+                                    await page.reload(
+                                        wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS
+                                    )
+                                    await page.wait_for_timeout(2000)
                                 except Exception:
                                     pass
-                        if not data_ru:
-                            raise RuntimeError("Не удалось получить таблицы отчёта (получена только схема)")
+                        if not parsed_main:
+                            html = await page.content()
+                            data = parse_report_html(html)
+                            data_ru, missing = apply_mapping(data, mapping, return_missing=True)
+                            if not _has_any_report_ru(data_ru):
+                                raise RuntimeError(
+                                    "Encar не вернул данные отчёта (нет таблиц и схемы). "
+                                    "Проверьте carid, прокси или задайте REPORT_PROXY_TRY_DIRECT=1."
+                                )
+                            _log(
+                                "REPORT_MAPPED: предупреждение — отчёт без полного набора таблиц, отдаём что удалось распарсить"
+                            )
                         phase = "diag"
                         diag = run_report_diagnostics(report_base)
                         await _status("Сборка HTML: логотип, схемы кузова…")
@@ -854,7 +918,7 @@ async def fetch_report_pdf_mapped(
                         # #region agent log
                         _debug_log("encar_report.py:before_set_content", "before set_content", {"html_len": len(rendered)}, "H3")
                         # #endregion
-                        await page.set_content(rendered, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+                        await page.set_content(rendered, wait_until="domcontentloaded", timeout=STEP_TIMEOUT_MS)
                         # #region agent log
                         _debug_log("encar_report.py:after_set_content", "set_content ok", {}, "H3")
                         # #endregion
@@ -873,7 +937,12 @@ async def fetch_report_pdf_mapped(
                         # #region agent log
                         _debug_log("encar_report.py:before_pdf", "before page.pdf", {}, "H4")
                         # #endregion
-                        await page.pdf(path=str(save_path), format="A4", print_background=True)
+                        await page.pdf(
+                            path=str(save_path),
+                            format="A4",
+                            print_background=True,
+                            timeout=STEP_TIMEOUT_MS,
+                        )
                         # #region agent log
                         _debug_log("encar_report.py:after_pdf", "page.pdf ok", {}, "H4")
                         # #endregion
@@ -923,11 +992,11 @@ async def fetch_report_pdf(
     """
     Возвращает (успех, путь_к_HTML_резерва, картинки_в_PDF_ок).
     """
-    for attempt in range(2):
+    for attempt in range(3):
         if attempt > 0:
-            _log("REPORT: повторная попытка…")
+            _log(f"REPORT: повторная попытка {attempt + 1}/3…")
             if on_status:
-                await on_status("Повторная попытка загрузки…")
+                await on_status(f"Повторная попытка загрузки ({attempt + 1}/3)…")
         result = await fetch_report_pdf_mapped(carid, save_path, on_status=on_status, base_dir=base_dir)
         if result[0]:
             return result
